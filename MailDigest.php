@@ -20,9 +20,9 @@ $wgExtensionCredits['validextensionclass'][] = array(
 $dir = dirname(__FILE__) . '/';
 
 $wgExtensionMessagesFiles['MailDigest'] = $dir . 'MailDigest.i18n.php';
-require_once( $dir . "MailDigest.body.php" );
+require_once($dir . "MailDigest.body.php");
 
-function add_user_toggles($user, &$extraToggles) 
+function add_user_toggles($user, &$extraToggles)
 {
     $extraToggles['emailwatch'] = array( // ] = 'Email daily Watchlist changes';
                'type' => 'check',
@@ -33,7 +33,7 @@ function add_user_toggles($user, &$extraToggles)
                'type' => 'check',
                'label-message' => 'tog-emailplainformat',
                'section'       => 'misc/maildigest',
-       );
+        );
 
  /*
  * Changes in this file will be lost during software upgrades.
@@ -42,16 +42,16 @@ function add_user_toggles($user, &$extraToggles)
  * and edit the MediaWiki:* pages listed there.
  */
 
- 	return true;
+        return true;
 }
 
 function maildigest($action, $article)
 {
-	if ($action == "maildigest") {
-		mailRecentChangesDigest();
-		return false;
-	}
-	return true;
+    if ($action == "maildigest") {
+        mailRecentChangesDigest();
+        return false;
+    }
+    return true;
 }
 
 $wgHooks['GetPreferences'][] = 'add_user_toggles';
