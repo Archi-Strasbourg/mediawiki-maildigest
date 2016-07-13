@@ -6,6 +6,67 @@ require_once( $IP . "/includes/WatchedItem.php" );
 # modifications by MHart - this page will email a watchlist digest using sendmail, once per day
 # update to be a plugin not a specialpage by MarcoWobben
 
+if (!function_exists('wlCutoffLinks')) {
+	function wlCutoffLinks( $days, $page = 'Watchlist', $options = array() ) {
+		global $wgLang;
+
+		$hours = array( 1, 2, 6, 12 );
+		$days = array( 1, 3, 7 );
+		$i = 0;
+		foreach( $hours as $h ) {
+			$hours[$i++] = wlHoursLink( $h, $page, $options );
+		}
+		$i = 0;
+		foreach( $days as $d ) {
+			$days[$i++] = wlDaysLink( $d, $page, $options );
+		}
+		return wfMsgExt('wlshowlast',
+			array('parseinline', 'replaceafter'),
+			$wgLang->pipeList( $hours ),
+			$wgLang->pipeList( $days ),
+			wlDaysLink( 0, $page, $options ) );
+	}
+}
+
+if (!function_exists('wlHoursLink')) {
+	function wlHoursLink( $h, $page, $options = array() ) {
+		global $wgUser, $wgLang, $wgContLang;
+
+		$sk = $wgUser->getSkin();
+		$title = Title::newFromText( $wgContLang->specialPage( $page ) );
+		$options['days'] = ($h / 24.0);
+
+		$s = $sk->linkKnown(
+			$title,
+			$wgLang->formatNum( $h ),
+			array(),
+			$options
+		);
+
+		return $s;
+	}
+}
+
+if (!function_exists('wlDaysLink')) {
+	function wlDaysLink( $d, $page, $options = array() ) {
+		global $wgUser, $wgLang, $wgContLang;
+
+		$sk = $wgUser->getSkin();
+		$title = Title::newFromText( $wgContLang->specialPage( $page ) );
+		$options['days'] = $d;
+		$message = ($d ? $wgLang->formatNum( $d ) : wfMsgHtml( 'watchlistall2' ) );
+
+		$s = $sk->linkKnown(
+			$title,
+			$message,
+			array(),
+			$options
+		);
+
+		return $s;
+	}
+}
+
 function mailRecentChangesDigest()
 {
 	global $wgUser, $wgOut, $wgLang, $wgTitle, $wgMemc, $wgRequest, $wgLoadBalancer;
@@ -18,14 +79,14 @@ function mailRecentChangesDigest()
 	$wgOut->setRobotpolicy( "noindex,nofollow" );
 
 	$specialTitle = Title::makeTitle( NS_SPECIAL, "MailDigest" );
-	
+
 	$uid = $wgUser->getID();
-	
-	if ($wgUser->getName() != '127.0.0.1') { // adding support for user groups makes sence
+
+	if ($wgUser->getName() != 'Nana') { // adding support for user groups makes sence
 		$wgOut->addHTML($wgUser->getName() . ' is not authorized to send emails');
 		return;
 	}
-	
+
 #	if( $uid == 0 ) {
 #		$wgOut->addHTML( wfMsg( "nowatchlist" ) );
 #		return;
@@ -36,7 +97,7 @@ function mailRecentChangesDigest()
 	$action = $wgRequest->getVal( 'action' );
 	$remove = $wgRequest->getVal( 'remove' );
 	$id = $wgRequest->getVal( 'id' );
-	
+
 	$days = 1;
 
 	if(($action == "submit") && isset($remove) && is_array($id)) {
@@ -75,11 +136,14 @@ while ($userS = $userRES->fetchObject())
 	$nUSER = $userS->wl_user;
 	$htmlmessage = '';
 
-	$sqlGetUser = "SELECT user_name, user_email,user_options FROM user WHERE user_id=$nUSER";
+	$sqlGetUser = "SELECT user_name, user_email FROM user WHERE user_id=$nUSER";
 	$resGetUser = $db->query( $sqlGetUser );
 	$sGetUser = $resGetUser->fetchObject();
+	if (!isset($sGetUser->user_name)) {
+		break;
+	}
 	$mailUser =User::newFromName($sGetUser->user_name);
-	$mailUser->decodeOptions($sGetUser->user_options);
+	//$mailUser->decodeOptions($sGetUser->user_options);
 
 	// $wgOut->addHTML( print_r($mailUser, true) . "<hr/>" );
 
@@ -95,8 +159,8 @@ while ($userS = $userRES->fetchObject())
 		if($nitems == 0) {
 	//        $wgOut->addHTML( wfMsg( "nowatchlist" ) );
 			return;
-	} 
-	
+	}
+
 	// $wgLoadBalancer->force(-1);
 	if ( is_null( $days ) ) {
 		$big = 1000;
@@ -109,7 +173,7 @@ while ($userS = $userRES->fetchObject())
 	} else {
 		$days = floatval($days);
 	}
-	
+
 	if ( $days <= 0 ) {
 		$docutoff = '';
 		$cutoff = false;
@@ -123,17 +187,17 @@ while ($userS = $userRES->fetchObject())
 		$res = $db->query( $sql );
 		$s = $res->fetchObject();
 		$npages = $s->n;
-		
+
 	}
-	
+
 	if(isset($_REQUEST['magic'])) {
 		$toadd = wfMsg( "watchlistcontains", $wgLang->formatNum( $nitems ) ) .
 			"<p>" . wfMsg( "watcheditlist" ) . "</p>\n" ;
 #		$wgOut->addHTML( $toadd);
 		$htmlmessage .= $toadd;
-		
+
 		$toadd = "<form action='" .
-			$specialTitle->escapeLocalUrl( "action=submit" ) .
+			$specialTitle->getLocalUrl( "action=submit" ) .
 			"' method='post'>\n" .
 			"<ul>\n" ;
 #		$wgOut->addHTML( $toadd);
@@ -162,17 +226,17 @@ while ($userS = $userRES->fetchObject())
 			"</form>\n" ;
 #		$wgOut->addHTML($toadd);
 		$htmlmessage .= $toadd;
-		
+
 		$wgLoadBalancer->force(0);
 		return;
 	}
-	
+
 	# If the watchlist is relatively short, it's simplest to zip
 	# down its entirety and then sort the results.
-	
+
 	# If it's relatively long, it may be worth our while to zip
 	# through the time-sorted page list checking for watched items.
-	
+
 	# Up estimate of watched items by 15% to compensate for talk pages...
 	if( $cutoff && ( $nitems*1.15 > $npages ) ) {
 		$x = "page_touched";
@@ -184,17 +248,17 @@ while ($userS = $userRES->fetchObject())
 		$z = "(wl_namespace=page_namespace OR wl_namespace+1=page_namespace)";
 	}
 
-	
+
 	$toadd = "<i>" . wfMsg( "watchdetails",
 		$wgLang->formatNum( $nitems ), $wgLang->formatNum( $npages ), $y,
-		$specialTitle->escapeLocalUrl( "magic=yes" ) ) . "</i><br />\n" ;
-		
+		$specialTitle->getLocalUrl( "magic=yes" ) ) . "</i><br />\n" ;
+
 #	$wgOut->addHTML( $toadd);
 	$htmlmessage .= $toadd;
-	 
+
 	$use_index=$wgIsMySQL?"USE INDEX ($x)":"";
-	$sql = "SELECT 
-		page_namespace, page_title, rev_comment, page_id, rev_user, rev_user_text, page_touched, page_is_new
+	$sql = "SELECT
+		page_namespace, page_title, rev_id, rev_comment, page_id, rev_user, rev_user_text, page_touched, page_is_new
 		FROM watchlist
 		JOIN page ON page.page_namespace = watchlist.wl_namespace
 		AND page.page_title = wl_title
@@ -216,7 +280,7 @@ while ($userS = $userRES->fetchObject())
 	$toadd =  "\n<hr />\n{$note}\n<br />" ;
 #	$wgOut->addHTML($toadd);
 	$htmlmessage .= $toadd;
-	
+
 	$note = wlCutoffLinks( $days );
 	$toadd = "{$note}\n" ;
 #	$wgOut->addHTML( $toadd);
@@ -226,7 +290,7 @@ while ($userS = $userRES->fetchObject())
 		$toadd = "<p><i>" . wfMsg( "watchnochange" ) . "</i></p>" ;
 #		$wgOut->addHTML($toadd);
 		$htmlmessage .= $toadd;
-		$wgLoadBalancer->force(0);
+		//$wgLoadBalancer->force(0);
 		return;
 	}
 
@@ -237,7 +301,7 @@ while ($userS = $userRES->fetchObject())
 	$counter = 1;
 	while ( $obj = $res->fetchObject( ) ) {
 		# Make fake RC entry
-		$rcr = RecentChange::newFromCurRow( $obj );
+		$rcr = RecentChange::newFromConds(array('rc_this_oldid'=>$obj->rev_id));
 		$rcr->counter = $counter++;
 		$s .= $rc->recentChangesLine( $rcr, true );
 	}
@@ -250,21 +314,21 @@ while ($userS = $userRES->fetchObject())
 	if ( $wgUseWatchlistCache ) {
 		$wgMemc->set( $memckey, $s, $wgWLCacheTimeout);
 	}
-	
+
 	// $wgLoadBalancer->force(0);
 
 	global $wgSitename, $wgServer, $wgScriptPath;
-	
+
 	$mailedURL = $wgServer . $wgScriptPath;
-	$fixedhtmlmessage = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">';	
+	$fixedhtmlmessage = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">';
 	$fixedhtmlmessage .= '<html><body>' .
-		str_replace('/index',$mailedURL . '/index', $htmlmessage) .
+		str_replace($wgScriptPath.'/index',$mailedURL . '/index', $htmlmessage) .
 		'</body></html>';
 
 	$to	 = $sGetUser->user_name . '<' . $sGetUser->user_email . '>';
 	$subject = $wgSitename . ' Watchlist Digest';
 	if ( 1 == $mailUser->getOption( 'emailplainformat' ) ) {
-		$headers .= 'From: ' . $wgSitename . "<noreply@corduroy.nl>\r\n";
+		$headers = 'From: ' . $wgSitename . "<noreply@corduroy.nl>\r\n";
 		$fixedhtmlmessage .= "\r\n" . $mailedURL . '/index.php/Special:Watchlist' . "\r\n";
 		mail($to, $subject, strip_tags($fixedhtmlmessage), $headers);
 		$wgOut->addHTML('plain email sent to ' . $sGetUser->user_name . ' (' . $sGetUser->user_email . ')' . '<br>');
@@ -279,5 +343,5 @@ while ($userS = $userRES->fetchObject())
 		$wgOut->addHTML('html email sent to ' . $sGetUser->user_name . ' (' . $sGetUser->user_email . ')' . '<br>');
 	}
 }
-}	
+}
 }
